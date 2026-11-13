@@ -1,0 +1,49 @@
+import { Text, View } from 'react-native';
+import { Bell } from 'lucide-react-native';
+
+import { IconButton } from '@/components/ui';
+import { format, useLang, useStrings } from '@/lib/i18n';
+import { colors } from '@/lib/theme';
+
+function greetingKey(hour: number) {
+  if (hour < 12) return 'greetingMorning' as const;
+  if (hour < 18) return 'greetingAfternoon' as const;
+  return 'greetingEvening' as const;
+}
+
+export type HomeHeaderProps = {
+  initials: string;
+  name: string;
+  unread: boolean;
+  onLanguage?: () => void;
+  onNotifications?: () => void;
+};
+
+export function HomeHeader({ initials, name, unread, onLanguage, onNotifications }: HomeHeaderProps) {
+  const s = useStrings();
+  const lang = useLang();
+
+  return (
+    <View className="flex-row items-center gap-3">
+      <View className="h-[46px] w-[46px] items-center justify-center rounded-2xl bg-border" accessibilityElementsHidden>
+        <Text className="font-sans-bold text-[15px] text-blue">{initials}</Text>
+      </View>
+      <View className="flex-1">
+        <Text className="font-sans text-[13px] text-muted">{s.home[greetingKey(new Date().getHours())]}</Text>
+        <Text className="font-sans-bold text-lg text-ink" numberOfLines={1}>
+          {name}
+        </Text>
+      </View>
+      <IconButton accessibilityLabel={format(s.home.languageButton, { lang: lang.toUpperCase() })} onPress={onLanguage}>
+        <Text className="font-sans-bold text-sm text-ink">{lang.toUpperCase()}</Text>
+      </IconButton>
+      <IconButton
+        accessibilityLabel={unread ? s.home.notificationsUnread : s.home.notifications}
+        onPress={onNotifications}
+        badge={unread}
+      >
+        <Bell size={20} color={colors.ink} />
+      </IconButton>
+    </View>
+  );
+}

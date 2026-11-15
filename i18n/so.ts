@@ -184,7 +184,6 @@ export const so: Translations = {
     empty: 'Wax dhaqdhaqaaq ah oo la mid ah raadintaada ma jiro.', // TODO(so-review)
   },
   profile: {
-    memberSince: 'Xubin {tier} · laga bilaabo {date}', // TODO(so-review)
     language: 'Luqadda', // TODO(so-review)
     english: 'Ingiriisi', // TODO(so-review)
     somali: 'Soomaali', // TODO(so-review)

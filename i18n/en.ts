@@ -181,7 +181,6 @@ export const en = {
     empty: 'No transactions match your search.',
   },
   profile: {
-    memberSince: '{tier} member · since {date}',
     language: 'Language',
     english: 'English',
     somali: 'Somali',

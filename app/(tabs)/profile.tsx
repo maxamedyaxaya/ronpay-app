@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Globe, LogOut, MessageCircle } from 'lucide-react-native';
 
 import { ListGroup, ListRow, Segmented, ToggleRow } from '@/components/ui';
-import { format, setLang, useLang, useStrings, type Lang } from '@/lib/i18n';
+import { setLang, useLang, useStrings, type Lang } from '@/lib/i18n';
 import { sampleProfile } from '@/lib/sample-tabs';
 import { colors } from '@/lib/theme';
 
@@ -21,18 +21,12 @@ export default function ProfileScreen() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <ScrollView contentContainerClassName="gap-5 px-4 pb-8 pt-3" showsVerticalScrollIndicator={false}>
         <View className="flex-row items-center gap-3.5" accessible accessibilityRole="header">
-          <View className="h-14 w-14 items-center justify-center rounded-2xl border-2 border-gold bg-border">
+          <View className="h-14 w-14 items-center justify-center rounded-2xl bg-border">
             <Text className="font-sans-extrabold text-lg text-ink">{p.initials}</Text>
           </View>
           <View className="flex-1 gap-0.5">
             <Text className="font-sans-extrabold text-xl text-ink">{p.name}</Text>
-            <Text className="font-mono text-xs text-muted">{p.phone}</Text>
-            <View className="flex-row items-center gap-1.5">
-              <View className="h-2 w-2 rounded-full bg-gold" />
-              <Text className="font-sans-semibold text-xs text-gold">
-                {format(s.profile.memberSince, { tier: s.tiers[p.tier], date: p.since })}
-              </Text>
-            </View>
+            <Text className="font-sans text-[13px] text-muted">{p.email}</Text>
           </View>
         </View>
 

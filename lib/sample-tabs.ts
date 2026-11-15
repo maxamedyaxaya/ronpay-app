@@ -138,9 +138,8 @@ export const sampleWallet = {
 export const sampleProfile = {
   name: 'Maxamed Yaxaye',
   initials: 'MY',
-  phone: '+252 63 412 7781',
-  tier: 'gold' as TierKey,
-  since: 'Oct 2026',
+  // Made-up address on a reserved test domain — not a real person.
+  email: 'maxamed@roonpay.example',
   withdrawalNumber: 'Zaad · 063 412 7781',
 };
 

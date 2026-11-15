@@ -9,25 +9,35 @@ import { HomeHeader } from '@/components/home/HomeHeader';
 import { InviteCard } from '@/components/home/InviteCard';
 import { PackageSlider } from '@/components/home/PackageSlider';
 import { ActivityRow, SectionHeader, StatBox } from '@/components/ui';
-import { format, useStrings } from '@/lib/i18n';
+import { format, setLang, useLang, useStrings } from '@/lib/i18n';
 import { sampleHome } from '@/lib/sample-home';
+import { sampleSettings } from '@/lib/sample-tabs';
 
 // Design reference: docs/RoonPay-UI-Design-v1.1.pdf, page 9.
 // Data is the temporary example from lib/sample-home.ts until step 3 (mock API + React Query).
 export default function HomeScreen() {
   const s = useStrings();
   const router = useRouter();
+  const lang = useLang();
   const d = sampleHome;
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <ScrollView contentContainerClassName="gap-4 px-4 pb-8 pt-3" showsVerticalScrollIndicator={false}>
-        <HomeHeader initials={d.member.initials} name={d.member.fullName} unread={d.unreadNotifications} />
+        <HomeHeader
+          initials={d.member.initials}
+          name={d.member.fullName}
+          unread={d.unreadNotifications}
+          onLanguage={() => setLang(lang === 'en' ? 'so' : 'en')}
+          onNotifications={() => router.push('/notifications')}
+        />
 
         <BalanceCard
           available={d.balance.available}
           totalEarned={d.balance.totalEarned}
-          totalWithdrawn={d.balance.totalWithdrawn}
+          pendingDeposits={d.balance.pendingDeposits}
+          onDeposit={() => router.push('/deposit')}
+          onHistory={() => router.navigate('/wallet')}
         />
 
         <View className="flex-row gap-3">
@@ -53,7 +63,12 @@ export default function HomeScreen() {
           actionLabel={s.common.seeAll}
           onAction={() => router.navigate('/packages')}
         />
-        <PackageSlider packages={d.packages} onBuyAnother={() => router.navigate('/packages')} />
+        <PackageSlider
+          packages={d.packages}
+          rewardPercent={sampleSettings.packageLinkRewardPercent}
+          onBuyAnother={() => router.navigate('/packages')}
+          onOpen={(id) => router.push({ pathname: '/package/[id]', params: { id } })}
+        />
 
         <InviteCard reward={d.inviteReward} onMyTeam={() => router.navigate('/team')} />
 

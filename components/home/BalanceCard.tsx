@@ -10,7 +10,7 @@ import { colors, withAlpha } from '@/lib/theme';
 export type BalanceCardProps = {
   available: string;
   totalEarned: string;
-  totalWithdrawn: string;
+  pendingDeposits: string;
   onDeposit?: () => void;
   onHistory?: () => void;
 };
@@ -18,7 +18,7 @@ export type BalanceCardProps = {
 const HIDDEN = '••••';
 
 /** Blue → violet gradient card at the top of Home. */
-export function BalanceCard({ available, totalEarned, totalWithdrawn, onDeposit, onHistory }: BalanceCardProps) {
+export function BalanceCard({ available, totalEarned, pendingDeposits, onDeposit, onHistory }: BalanceCardProps) {
   const s = useStrings();
   const [hidden, setHidden] = useState(false);
 
@@ -67,7 +67,7 @@ export function BalanceCard({ available, totalEarned, totalWithdrawn, onDeposit,
       <View className="mt-4 flex-row gap-3">
         {[
           { label: s.home.totalEarned, value: totalEarned },
-          { label: s.home.totalWithdrawn, value: totalWithdrawn },
+          { label: s.home.pendingDeposits, value: pendingDeposits },
         ].map((item) => (
           <View key={item.label} className="flex-1 rounded-2xl bg-bg/25 px-3.5 py-3">
             <Text className="font-sans text-xs text-white/85">{item.label}</Text>

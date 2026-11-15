@@ -5,12 +5,6 @@ import { IconButton } from '@/components/ui';
 import { format, useLang, useStrings } from '@/lib/i18n';
 import { colors } from '@/lib/theme';
 
-function greetingKey(hour: number) {
-  if (hour < 12) return 'greetingMorning' as const;
-  if (hour < 18) return 'greetingAfternoon' as const;
-  return 'greetingEvening' as const;
-}
-
 export type HomeHeaderProps = {
   initials: string;
   name: string;
@@ -29,7 +23,7 @@ export function HomeHeader({ initials, name, unread, onLanguage, onNotifications
         <Text className="font-sans-bold text-[15px] text-blue">{initials}</Text>
       </View>
       <View className="flex-1">
-        <Text className="font-sans text-[13px] text-muted">{s.home[greetingKey(new Date().getHours())]}</Text>
+        <Text className="font-sans text-[13px] text-muted">{s.home.welcome}</Text>
         <Text className="font-sans-bold text-lg text-ink" numberOfLines={1}>
           {name}
         </Text>

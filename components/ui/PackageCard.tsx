@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Check } from 'lucide-react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { cn } from '@/lib/cn';
@@ -12,13 +13,13 @@ import { Pill } from './Pill';
 import { SlotBar } from './SlotBar';
 
 /** Tier-tinted border and price color (static strings so Tailwind keeps them). */
-const tierClass: Record<TierKey, { border: string; text: string }> = {
-  bronze: { border: 'border-tier-bronze/60', text: 'text-tier-bronze' },
-  silver: { border: 'border-tier-silver/60', text: 'text-tier-silver' },
-  gold: { border: 'border-tier-gold/60', text: 'text-tier-gold' },
-  platinum: { border: 'border-tier-platinum/60', text: 'text-tier-platinum' },
-  diamond: { border: 'border-tier-diamond/60', text: 'text-tier-diamond' },
-  royal: { border: 'border-tier-royal/60', text: 'text-tier-royal' },
+const tierClass: Record<TierKey, { border: string; strong: string; text: string; fill: string }> = {
+  bronze: { border: 'border-tier-bronze/60', strong: 'border-tier-bronze', text: 'text-tier-bronze', fill: 'bg-tier-bronze' },
+  silver: { border: 'border-tier-silver/60', strong: 'border-tier-silver', text: 'text-tier-silver', fill: 'bg-tier-silver' },
+  gold: { border: 'border-tier-gold/60', strong: 'border-tier-gold', text: 'text-tier-gold', fill: 'bg-tier-gold' },
+  platinum: { border: 'border-tier-platinum/60', strong: 'border-tier-platinum', text: 'text-tier-platinum', fill: 'bg-tier-platinum' },
+  diamond: { border: 'border-tier-diamond/60', strong: 'border-tier-diamond', text: 'text-tier-diamond', fill: 'bg-tier-diamond' },
+  royal: { border: 'border-tier-royal/60', strong: 'border-tier-royal', text: 'text-tier-royal', fill: 'bg-tier-royal' },
 };
 
 export type PackageCardProps = {
@@ -28,16 +29,21 @@ export type PackageCardProps = {
   subtitle?: string;
   /** Formatted price (e.g. "$25"). */
   price?: string;
-  /** Owned variant: purchase date, e.g. "28 Oct". */
-  date?: string;
-  /** Owned variant: labels for the bottom row ("Price", "Since"). */
+  /** Owned variant: label above the price ("Price"). */
   priceLabel?: string;
-  dateLabel?: string;
+  /** Owned variant: package-link reward per referral, e.g. { label: "Per referral", value: "$4.00" }. */
+  reward?: { label: string; value: string };
+  /** Owned variant: the most the link can earn (reward × slots), e.g. { label: "Up to", value: "$20.00" }. */
+  maxTotal?: { label: string; value: string };
   /** Label for the Active pill; omit to hide it. */
   activeLabel?: string;
   /** Owned variant: package-link slots (CLAUDE.md §4.5.2). */
   slots?: { used: number; total: number; label: string; status: string };
   selected?: boolean;
+  /** Row variant: facts shown only while the row is selected (e.g. per sale, up to). */
+  details?: { label: string; value: string }[];
+  /** Row variant: number of link slots, drawn as hexagons while selected. */
+  slotsPreview?: { count: number; label: string };
   onPress?: () => void;
   /**
    * `row`: one line in the Packages list (tap to select).
@@ -49,8 +55,13 @@ export type PackageCardProps = {
   className?: string;
 };
 
-/** Owned card height; matches the "Buy another package" card in the Home slider. */
-export const OWNED_HEIGHT = 212;
+/**
+ * Owned card height follows its width (a little wider than tall-ish, like a bank card),
+ * never below what the content needs. The "Buy another package" card uses the same value.
+ */
+export function ownedCardHeight(width?: number) {
+  return Math.max(176, Math.round((width ?? 320) * 0.58));
+}
 
 /** A soft light band that sweeps across the card every few seconds. */
 function Shine({ width }: { width: number }) {
@@ -111,12 +122,14 @@ export function PackageCard({
   name,
   subtitle,
   price,
-  date,
+  reward,
+  maxTotal,
   priceLabel,
-  dateLabel,
   activeLabel,
   slots,
   selected = false,
+  details,
+  slotsPreview,
   onPress,
   variant = 'row',
   width,
@@ -125,15 +138,24 @@ export function PackageCard({
   const tierColor = colors.tier[tier];
 
   if (variant === 'owned') {
-    const a11y = [name, price, date && dateLabel ? `${dateLabel} ${date}` : date, activeLabel].filter(Boolean).join(', ');
+    const a11y = [
+      name,
+      price,
+      reward && `${reward.label} ${reward.value}`,
+      maxTotal && `${maxTotal.label} ${maxTotal.value}`,
+      activeLabel,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const stats = [reward, maxTotal].filter((x): x is { label: string; value: string } => Boolean(x));
     return (
       <Pressable
         onPress={onPress}
         disabled={!onPress}
         accessibilityRole={onPress ? 'button' : undefined}
         accessibilityLabel={a11y}
-        // Slider cards get a fixed width from the parent (a runtime value).
-        style={width ? { width, height: OWNED_HEIGHT } : { height: OWNED_HEIGHT }}
+        // Size comes from the slider width at runtime, so it can't be a className.
+        style={{ width, height: ownedCardHeight(width) }}
         className={cn('overflow-hidden rounded-3xl border bg-surface active:opacity-90', tierClass[tier].border, className)}
       >
         {/* Tier-colored light from the top-left fading into the card. */}
@@ -146,23 +168,23 @@ export function PackageCard({
           pointerEvents="none"
         />
         {/* Honeycomb in the tier color on the right. */}
-        {/* Clipped above the slot bar so its lines never cross the slot text. */}
-        <View className="absolute bottom-[68px] right-0 top-0 w-48 overflow-hidden" pointerEvents="none">
+        {/* Kept to the top-right corner so its lines never cross the numbers or slot text. */}
+        <View className="absolute right-0 top-0 h-24 w-44 overflow-hidden" pointerEvents="none">
           <View className="absolute -bottom-6 -right-16">
             <HexPattern width={200} height={200} color={tierColor} opacity={0.2} highlight />
           </View>
         </View>
         {width ? <Shine width={width} /> : null}
 
-        <View className="flex-1 justify-between p-5">
-          <View className="flex-row items-center gap-3.5">
-            <View className="h-[52px] w-[52px] items-center justify-center">
+        <View className="flex-1 justify-between p-4">
+          <View className="flex-row items-center gap-3">
+            <View className="h-11 w-11 items-center justify-center">
               <View className="absolute -left-6 -top-6" pointerEvents="none">
-                <Glow id={`glow-${tier}`} color={tierColor} size={104} />
+                <Glow id={`glow-${tier}`} color={tierColor} size={92} />
               </View>
-              <HexBadge tier={tier} size={52} />
+              <HexBadge tier={tier} size={44} />
             </View>
-            <Text className="flex-1 font-sans-extrabold text-[22px] text-ink" numberOfLines={1}>
+            <Text className="flex-1 font-sans-extrabold text-xl text-ink" numberOfLines={1}>
               {name}
             </Text>
             {activeLabel && (
@@ -173,20 +195,22 @@ export function PackageCard({
             )}
           </View>
 
-          {/* Price and date sit on the left; the honeycomb has the right side. */}
-          <View className="flex-row items-end gap-6">
+          {/* Price, reward per referral and the most the link can earn. */}
+          <View className="flex-row items-end gap-4">
             {price && (
               <View>
-                {priceLabel && <Text className="font-sans-medium text-[11px] uppercase tracking-wider text-muted">{priceLabel}</Text>}
-                <Text className={cn('font-sans-extrabold text-2xl', tierClass[tier].text)}>{price}</Text>
+                {priceLabel && <Text className="font-sans-medium text-[10px] uppercase tracking-wider text-muted">{priceLabel}</Text>}
+                <Text className={cn('font-sans-extrabold text-[22px]', tierClass[tier].text)}>{price}</Text>
               </View>
             )}
-            {date && (
-              <View className="border-l border-border pb-1 pl-6">
-                {dateLabel && <Text className="font-sans-medium text-[11px] uppercase tracking-wider text-muted">{dateLabel}</Text>}
-                <Text className="font-sans-bold text-[15px] text-ink">{date}</Text>
+            {stats.map((st) => (
+              <View key={st.label} className="border-l border-border pb-1 pl-4">
+                <Text className="font-sans-medium text-[10px] uppercase tracking-wider text-muted" numberOfLines={1}>
+                  {st.label}
+                </Text>
+                <Text className="font-sans-bold text-[15px] text-ink">{st.value}</Text>
               </View>
-            )}
+            ))}
           </View>
 
           {slots && <SlotBar tier={tier} {...slots} />}
@@ -204,7 +228,34 @@ export function PackageCard({
     );
   }
 
-  const a11y = [name, price, subtitle, activeLabel].filter(Boolean).join(', ');
+  return (
+    <RowCard
+      tier={tier}
+      name={name}
+      subtitle={subtitle}
+      price={price}
+      activeLabel={activeLabel}
+      selected={selected}
+      details={details}
+      slotsPreview={slotsPreview}
+      onPress={onPress}
+      className={className}
+    />
+  );
+}
+
+type RowCardProps = Pick<
+  PackageCardProps,
+  'tier' | 'name' | 'subtitle' | 'price' | 'activeLabel' | 'selected' | 'details' | 'slotsPreview' | 'onPress' | 'className'
+>;
+
+/** One package in the Packages list. When selected it grows into a tier-colored card with details. */
+function RowCard({ tier, name, subtitle, price, activeLabel, selected = false, details, slotsPreview, onPress, className }: RowCardProps) {
+  const tierColor = colors.tier[tier];
+  const [width, setWidth] = useState(0);
+  const extra = selected && details ? details.map((d) => `${d.label} ${d.value}`) : [];
+  const a11y = [name, price, subtitle, activeLabel, ...extra].filter(Boolean).join(', ');
+
   return (
     <Pressable
       onPress={onPress}
@@ -212,29 +263,91 @@ export function PackageCard({
       accessibilityRole={onPress ? 'radio' : undefined}
       accessibilityState={{ selected }}
       accessibilityLabel={a11y}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       className={cn(
-        'min-h-touch flex-row items-center gap-3 overflow-hidden rounded-2xl border px-3.5 py-3 active:opacity-80',
-        selected ? 'border-primary bg-primary/10' : 'border-border bg-surface',
+        'overflow-hidden rounded-2xl bg-surface active:opacity-90',
+        selected ? cn('border-2', tierClass[tier].strong) : 'border border-border',
         className,
       )}
     >
-      {/* Faint tier light on the left edge. */}
-      <LinearGradient
-        colors={[withAlpha(tierColor, 0.16), withAlpha(tierColor, 0)]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 0.5, y: 0.5 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <HexBadge tier={tier} size={38} />
-      <View className="flex-1 gap-0.5">
-        <View className="flex-row items-center gap-2">
-          <Text className="font-sans-bold text-[15px] text-ink">{name}</Text>
-          {activeLabel && <Pill label={activeLabel} tone="success" size="sm" />}
+      {/* Tier light: a faint edge normally, a full wash when selected. */}
+      {selected ? (
+        <LinearGradient
+          colors={[withAlpha(tierColor, 0.3), withAlpha(tierColor, 0.08), withAlpha(colors.bg, 0.3)]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      ) : (
+        <LinearGradient
+          colors={[withAlpha(tierColor, 0.16), withAlpha(tierColor, 0)]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 0.5, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      )}
+      {selected && (
+        <View className="absolute right-0 top-0 h-24 w-40 overflow-hidden" pointerEvents="none">
+          <View className="absolute -bottom-8 -right-16">
+            <HexPattern width={190} height={190} color={tierColor} opacity={0.1} highlight />
+          </View>
         </View>
-        {subtitle && <Text className="font-sans text-xs text-muted">{subtitle}</Text>}
+      )}
+      {selected && width > 0 ? <Shine width={width} /> : null}
+
+      <View className={cn('min-h-touch flex-row items-center gap-3 px-3.5', selected ? 'pb-2.5 pt-3.5' : 'py-3')}>
+        <View className="items-center justify-center">
+          {selected && (
+            <View className="absolute" pointerEvents="none">
+              <Glow id={`row-glow-${tier}`} color={tierColor} size={88} />
+            </View>
+          )}
+          <HexBadge tier={tier} size={selected ? 46 : 38} />
+        </View>
+        <View className="flex-1 gap-0.5">
+          <View className="flex-row items-center gap-2">
+            <Text className={cn('text-ink', selected ? 'font-sans-extrabold text-lg' : 'font-sans-bold text-[15px]')}>{name}</Text>
+            {activeLabel && <Pill label={activeLabel} tone="success" size="sm" />}
+          </View>
+          {subtitle && !(selected && details?.length) && <Text className="font-sans text-xs text-muted">{subtitle}</Text>}
+        </View>
+        {price && <Text className={cn('font-sans-extrabold', selected ? 'text-[22px]' : 'text-lg', tierClass[tier].text)}>{price}</Text>}
+        {selected && (
+          <View className={cn('h-6 w-6 items-center justify-center rounded-full', tierClass[tier].fill)}>
+            <Check size={14} color={colors.bg} strokeWidth={3} />
+          </View>
+        )}
       </View>
-      {price && <Text className={cn('font-sans-extrabold text-lg', tierClass[tier].text)}>{price}</Text>}
+
+      {selected && (details?.length || slotsPreview) ? (
+        <View className="gap-3 px-3.5 pb-3.5">
+          {details && details.length > 0 && (
+            <View className="flex-row gap-2">
+              {details.map((d) => (
+                <View key={d.label} className="flex-1 rounded-xl border border-border bg-bg/60 px-3 py-2">
+                  <Text className="font-sans-medium text-[10px] uppercase tracking-wider text-muted" numberOfLines={1}>
+                    {d.label}
+                  </Text>
+                  <Text className="font-sans-bold text-[15px] text-ink" numberOfLines={1}>
+                    {d.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+          {slotsPreview && (
+            <View className="flex-row items-center gap-1.5">
+              <Text className="flex-1 font-sans-semibold text-xs text-muted">{slotsPreview.label}</Text>
+              {Array.from({ length: slotsPreview.count }, (_, i) => (
+                <HexBadge key={i} tier={tier} variant="outline" size={20} />
+              ))}
+            </View>
+          )}
+        </View>
+      ) : null}
     </Pressable>
   );
 }

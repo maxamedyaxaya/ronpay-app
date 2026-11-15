@@ -190,7 +190,8 @@ export default function UiKitScreen() {
             tier="gold"
             name={s.tiers.gold}
             price="$10"
-            date="28 Oct"
+            reward={{ label: s.home.perReferralLabel, value: "$4.00" }}
+            maxTotal={{ label: s.home.maxTotalLabel, value: "$20.00" }}
             slots={{ used: 3, total: 5, label: s.home.slotsLabel, status: format(s.home.slotsLeft, { count: 2 }) }}
             activeLabel={s.status.active}
           />
@@ -199,7 +200,8 @@ export default function UiKitScreen() {
             tier="bronze"
             name={s.tiers.bronze}
             price="$1"
-            date="2 Nov"
+            reward={{ label: s.home.perReferralLabel, value: "$0.40" }}
+            maxTotal={{ label: s.home.maxTotalLabel, value: "$2.00" }}
             slots={{ used: 5, total: 5, label: s.home.slotsLabel, status: s.home.slotsFull }}
             activeLabel={s.status.active}
           />

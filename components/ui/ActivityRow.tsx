@@ -25,16 +25,31 @@ export type ActivityRowProps = {
   direction: 'in' | 'out';
   /** Draws the divider under the row (off for the last row). */
   divider?: boolean;
+  /** Small status under the amount, e.g. "Credited", "Pending". */
+  status?: string;
+  statusTone?: 'success' | 'gold' | 'danger' | 'muted';
 };
 
+const statusText = { success: 'text-success', gold: 'text-gold', danger: 'text-danger', muted: 'text-muted' } as const;
+
 /** One line in a transaction / activity list. */
-export function ActivityRow({ icon: Icon, tone = 'blue', title, subtitle, amount, direction, divider = true }: ActivityRowProps) {
+export function ActivityRow({
+  icon: Icon,
+  tone = 'blue',
+  title,
+  subtitle,
+  amount,
+  direction,
+  divider = true,
+  status,
+  statusTone = 'success',
+}: ActivityRowProps) {
   const t = tones[tone];
   return (
     <View
       className={cn('flex-row items-center gap-3 py-3.5', divider && 'border-b border-border')}
       accessible
-      accessibilityLabel={[title, subtitle, amount].filter(Boolean).join(', ')}
+      accessibilityLabel={[title, subtitle, amount, status].filter(Boolean).join(', ')}
     >
       <View className={cn('h-10 w-10 items-center justify-center rounded-xl', t.box)}>
         <Icon size={18} color={t.color} />
@@ -49,7 +64,10 @@ export function ActivityRow({ icon: Icon, tone = 'blue', title, subtitle, amount
           </Text>
         )}
       </View>
-      <Text className={cn('font-sans-bold text-[15px]', direction === 'in' ? 'text-success' : 'text-ink')}>{amount}</Text>
+      <View className="items-end gap-0.5">
+        <Text className={cn('font-sans-bold text-[15px]', direction === 'in' ? 'text-success' : 'text-ink')}>{amount}</Text>
+        {status ? <Text className={cn('font-sans-medium text-[11px]', statusText[statusTone])}>{status}</Text> : null}
+      </View>
     </View>
   );
 }

@@ -3,22 +3,34 @@ import { LayoutAnimation, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { Button, PackageCard, ScreenHeader } from '@/components/ui';
+import { Button, PackageCard, QueryState, ScreenHeader } from '@/components/ui';
+import type { Config, OwnedPackage } from '@/lib/api';
+import { both, useConfig, usePackages } from '@/lib/api/hooks';
 import { format, useStrings } from '@/lib/i18n';
 import { formatUsd, percentOf } from '@/lib/money';
-import { sampleCatalog, sampleOwned, sampleSettings } from '@/lib/sample-tabs';
 import type { TierKey } from '@/lib/theme';
 
 // Design reference: docs/RoonPay-UI-Design-v1.1.pdf, page 10 (left), updated for the
-// package-link rule in CLAUDE.md §4.5.2. Data is temporary (lib/sample-tabs.ts).
+// package-link rule in CLAUDE.md §4.5.2.
 export default function PackagesScreen() {
+  const config = useConfig();
+  const packages = usePackages();
+  return (
+    <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
+      <QueryState query={both(config, packages)}>{([c, p]) => <PackagesBody config={c} mine={p} />}</QueryState>
+    </SafeAreaView>
+  );
+}
+
+function PackagesBody({ config, mine }: { config: Config; mine: OwnedPackage[] }) {
   const s = useStrings();
   const router = useRouter();
-  const { packageLinkRewardPercent: percent, packageLinkSlots: slots } = sampleSettings;
+  const { packageLinkRewardPercent: percent, packageLinkSlots: slots } = config.settings;
+  const catalog = config.catalog;
   const [selected, setSelected] = useState<TierKey>('platinum');
-  const owned = new Set(sampleOwned.map((p) => p.tier));
+  const owned = new Set(mine.map((p) => p.tier));
 
-  const chosen = sampleCatalog.find((p) => p.tier === selected) ?? sampleCatalog[0];
+  const chosen = catalog.find((p) => p.tier === selected) ?? catalog[0];
   const chosenPerSale = percentOf(chosen.price, percent);
 
   const info = [
@@ -28,7 +40,7 @@ export default function PackagesScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
+    <>
       <ScrollView contentContainerClassName="gap-4 px-4 pb-6 pt-3" showsVerticalScrollIndicator={false}>
         <ScreenHeader title={s.tabs.packages} subtitle={format(s.packages.subtitle, { slots })} />
 
@@ -44,7 +56,7 @@ export default function PackagesScreen() {
         </View>
 
         <View className="gap-2.5">
-          {sampleCatalog.map((p) => {
+          {catalog.map((p) => {
             const perSale = percentOf(p.price, percent);
             return (
               <PackageCard
@@ -86,6 +98,6 @@ export default function PackagesScreen() {
           onPress={() => router.push({ pathname: '/checkout', params: { tier: chosen.tier } })}
         />
       </View>
-    </SafeAreaView>
+    </>
   );
 }

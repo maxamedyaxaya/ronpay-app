@@ -4,21 +4,37 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Clock, Lock } from 'lucide-react-native';
 
-import { BackHeader, Button, Input, NoticeBox } from '@/components/ui';
+import { BackHeader, Button, Input, NoticeBox, QueryState } from '@/components/ui';
+import { isApiError, type Config, type Profile } from '@/lib/api';
+import { both, useConfig, useIdempotencyKey, useProfile, useRequestWithdrawal, useWallet } from '@/lib/api/hooks';
 import { cn } from '@/lib/cn';
 import { format, useStrings } from '@/lib/i18n';
 import { formatUsd, parseUsd, usd } from '@/lib/money';
-import { sampleWallet, sampleWithdrawSettings } from '@/lib/sample-tabs';
 import { colors } from '@/lib/theme';
 
 // Design reference: docs/RoonPay-UI-Design-v1.1.pdf, page 13 (right). Rules: CLAUDE.md §4.7
 // (minimum, daily limit, no fee, amount locked, PIN required). The checks here only help the
-// member; the API checks everything again. Sending is a visual sample until step 3.
+// member; the API checks everything again.
 export default function WithdrawScreen() {
+  const wallet = useWallet();
+  const config = useConfig();
+  const profile = useProfile();
+  return (
+    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <QueryState query={both(both(wallet, config), profile)}>
+        {([[w, c], p]) => <WithdrawBody available={w.available} config={c} profile={p} />}
+      </QueryState>
+    </SafeAreaView>
+  );
+}
+
+function WithdrawBody({ available, config, profile }: { available: bigint; config: Config; profile: Profile }) {
   const s = useStrings();
   const router = useRouter();
-  const { minimum, dailyLimit, method, number } = sampleWithdrawSettings;
-  const available = sampleWallet.available - sampleWallet.locked;
+  const { minimum, dailyLimit } = config.withdraw;
+  const { withdrawMethod: method, withdrawNumber: number } = profile;
+  const request = useRequestWithdrawal();
+  const key = useIdempotencyKey();
 
   const [text, setText] = useState(formatUsd(minimum).slice(1));
   const [step, setStep] = useState<'amount' | 'pin' | 'done'>('amount');
@@ -52,12 +68,44 @@ export default function WithdrawScreen() {
       return;
     }
     setPinError(undefined);
-    setStep('done');
+    if (!amount) return;
+    request.mutate(
+      { req: { amount, pin }, key: key.get() },
+      {
+        onSuccess: () => {
+          key.renew();
+          setStep('done');
+        },
+        onError: (e) => {
+          // A refused request is final for this key; a new try gets a new key.
+          key.renew();
+          if (!isApiError(e)) return setPinError(s.common.errorGeneric);
+          switch (e.code) {
+            case 'WRONG_PIN':
+              setPin('');
+              return setPinError(s.withdraw.errPinWrong);
+            case 'EMAIL_NOT_CONFIRMED':
+              return setPinError(s.withdraw.emailTitle);
+            case 'BELOW_MINIMUM':
+              setStep('amount');
+              return setError(format(s.withdraw.errBelowMin, { amount: formatUsd(minimum) }));
+            case 'ABOVE_DAILY_LIMIT':
+              setStep('amount');
+              return setError(format(s.withdraw.errLimitLeft, { amount: formatUsd((e.details.left as bigint) ?? 0n) }));
+            case 'INSUFFICIENT_BALANCE':
+              setStep('amount');
+              return setError(format(s.withdraw.errBalance, { amount: formatUsd(available) }));
+            default:
+              return setPinError(s.common.errorGeneric);
+          }
+        },
+      },
+    );
   }
 
   if (step === 'done' && amount) {
     return (
-      <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <>
         <View className="flex-1 gap-4 px-4 pt-3">
           <BackHeader title={s.withdraw.title} />
           <NoticeBox
@@ -69,13 +117,21 @@ export default function WithdrawScreen() {
         <View className="border-t border-border px-4 py-3">
           <Button label={s.common.backHome} fullWidth onPress={() => router.replace('/')} />
         </View>
-      </SafeAreaView>
+      </>
+    );
+  }
+
+  if (!profile.emailConfirmed) {
+    return (
+      <View className="flex-1 gap-4 px-4 pt-3">
+        <BackHeader title={s.withdraw.title} />
+        <NoticeBox tone="warning" title={s.withdraw.emailTitle} body={s.withdraw.emailBody} />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerClassName="gap-4 px-4 pb-6 pt-3" keyboardShouldPersistTaps="handled">
           <BackHeader title={s.withdraw.title} />
 
@@ -198,10 +254,9 @@ export default function WithdrawScreen() {
           {step === 'amount' ? (
             <Button label={s.withdraw.confirm} icon={Lock} fullWidth onPress={next} />
           ) : (
-            <Button label={s.withdraw.send} icon={Lock} fullWidth onPress={send} />
+            <Button label={s.withdraw.send} icon={Lock} fullWidth loading={request.isPending} onPress={send} />
           )}
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }

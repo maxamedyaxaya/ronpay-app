@@ -4,11 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronRight, DollarSign, Hexagon, Share2, Trophy, UserCheck, UserPlus } from 'lucide-react-native';
 
-import { HexBadge, IconButton, Pill, ScreenHeader, Segmented, SlotBar, StatBox } from '@/components/ui';
+import { HexBadge, IconButton, Pill, QueryState, ScreenHeader, Segmented, SlotBar, StatBox } from '@/components/ui';
+import type { Config, OwnedPackage, Team, TeamMember } from '@/lib/api';
+import { both, useConfig, usePackages, useTeam } from '@/lib/api/hooks';
+import { shortDate } from '@/lib/dates';
 import { cn } from '@/lib/cn';
 import { format, useStrings } from '@/lib/i18n';
 import { formatUsd } from '@/lib/money';
-import { sampleOwned, sampleRank, sampleSettings, sampleTeam, type TeamMember } from '@/lib/sample-tabs';
 import { colors, type TierKey } from '@/lib/theme';
 
 const tierDot: Record<TierKey, string> = {
@@ -25,7 +27,7 @@ type Filter = 'all' | 'bought' | 'notYet';
 function MemberRow({ m }: { m: TeamMember }) {
   const s = useStrings();
   const bought = Boolean(m.tier);
-  const sub = m.tier ? format(s.team.boughtTier, { tier: s.tiers[m.tier], date: m.date }) : format(s.team.joinedOn, { date: m.date });
+  const sub = m.tier ? format(s.team.boughtTier, { tier: s.tiers[m.tier], date: shortDate(m.joinedAt) }) : format(s.team.joinedOn, { date: shortDate(m.joinedAt) });
   const amount = m.reward > 0n ? formatUsd(m.reward, { sign: true }) : '—';
 
   return (
@@ -55,24 +57,37 @@ function MemberRow({ m }: { m: TeamMember }) {
 }
 
 // Design reference: docs/RoonPay-UI-Design-v1.1.pdf, page 11 (left), plus a "My package links"
-// section for CLAUDE.md §4.5.2. Data is temporary (lib/sample-tabs.ts).
+// section for CLAUDE.md §4.5.2.
 export default function TeamScreen() {
+  const team = useTeam();
+  const packages = usePackages();
+  const config = useConfig();
+  return (
+    <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
+      <QueryState query={both(both(team, packages), config)}>
+        {([[t, p], c]) => <TeamBody team={t} owned={p} config={c} />}
+      </QueryState>
+    </SafeAreaView>
+  );
+}
+
+function TeamBody({ team, owned, config }: { team: Team; owned: OwnedPackage[]; config: Config }) {
   const s = useStrings();
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
-  const total = sampleSettings.packageLinkSlots;
+  const total = config.settings.packageLinkSlots;
+  const rank = team.rank;
 
-  const boughtCount = sampleTeam.filter((m) => m.tier).length;
-  const earned = sampleTeam.reduce((sum, m) => sum + m.reward, 0n);
-  const slotsLeft = sampleOwned.reduce((sum, p) => sum + Math.max(0, total - p.buyers.length), 0);
-  const members = sampleTeam.filter((m) => (filter === 'all' ? true : filter === 'bought' ? m.tier : !m.tier));
+  const boughtCount = team.members.filter((m) => m.tier).length;
+  const earned = team.members.reduce((sum, m) => sum + m.reward, 0n);
+  const slotsLeft = owned.reduce((sum, p) => sum + Math.max(0, total - p.buyers.length), 0);
+  const members = team.members.filter((m) => (filter === 'all' ? true : filter === 'bought' ? m.tier : !m.tier));
 
   const share = (tier: TierKey, url: string) =>
     Share.share({ message: format(s.team.shareMessage, { name: s.tiers[tier], url }) }).catch(() => undefined);
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
-      <ScrollView contentContainerClassName="gap-4 px-4 pb-8 pt-3" showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerClassName="gap-4 px-4 pb-8 pt-3" showsVerticalScrollIndicator={false}>
         <ScreenHeader title={s.team.title} subtitle={s.team.subtitle} />
 
         <View className="flex-row gap-3">
@@ -80,10 +95,10 @@ export default function TeamScreen() {
           <StatBox label={s.team.statEarned} value={formatUsd(earned)} icon={DollarSign} tone="success" />
         </View>
         <View className="flex-row gap-3">
-          <StatBox label={s.team.statSignups} value={String(sampleTeam.length)} icon={UserPlus} tone="gold" />
+          <StatBox label={s.team.statSignups} value={String(team.members.length)} icon={UserPlus} tone="gold" />
           <StatBox
             label={s.team.statSlotsLeft}
-            value={format(s.team.slotsOf, { left: slotsLeft, total: total * sampleOwned.length })}
+            value={format(s.team.slotsOf, { left: slotsLeft, total: total * owned.length })}
             icon={Hexagon}
             tone="blue"
           />
@@ -98,9 +113,9 @@ export default function TeamScreen() {
             <Trophy size={18} color={colors.gold} />
           </View>
           <View className="flex-1">
-            <Text className="font-sans-bold text-[15px] text-ink">{format(s.team.rankTitle, { rank: sampleRank.rank })}</Text>
+            <Text className="font-sans-bold text-[15px] text-ink">{format(s.team.rankTitle, { rank: rank.rank })}</Text>
             <Text className="font-sans text-xs text-muted">
-              {format(s.team.rankBody, { count: sampleRank.toTop, top: sampleRank.top })}
+              {format(s.team.rankBody, { count: rank.toTop, top: rank.top })}
             </Text>
           </View>
           <ChevronRight size={18} color={colors.muted} />
@@ -109,7 +124,7 @@ export default function TeamScreen() {
         <Text className="mt-2 font-sans-bold text-[17px] text-ink" accessibilityRole="header">
           {s.team.linksTitle}
         </Text>
-        {sampleOwned.map((p) => {
+        {owned.map((p) => {
           const used = p.buyers.length;
           const full = used >= total;
           return (
@@ -154,9 +169,9 @@ export default function TeamScreen() {
           value={filter}
           onChange={setFilter}
           options={[
-            { key: 'all', label: format(s.team.filterAll, { count: sampleTeam.length }) },
+            { key: 'all', label: format(s.team.filterAll, { count: team.members.length }) },
             { key: 'bought', label: format(s.team.filterBought, { count: boughtCount }) },
-            { key: 'notYet', label: format(s.team.filterNotYet, { count: sampleTeam.length - boughtCount }) },
+            { key: 'notYet', label: format(s.team.filterNotYet, { count: team.members.length - boughtCount }) },
           ]}
         />
 
@@ -167,7 +182,6 @@ export default function TeamScreen() {
             members.map((m) => <MemberRow key={m.id} m={m} />)
           )}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+    </ScrollView>
   );
 }

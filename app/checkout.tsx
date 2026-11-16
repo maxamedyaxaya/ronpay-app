@@ -4,11 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Lock, Plus, WalletCards } from 'lucide-react-native';
 
-import { BackHeader, Button, HexBadge, NoticeBox } from '@/components/ui';
+import { BackHeader, Button, HexBadge, NoticeBox, QueryState } from '@/components/ui';
+import { isApiError, type Config } from '@/lib/api';
+import { both, useBuyPackage, useConfig, useIdempotencyKey, useWallet } from '@/lib/api/hooks';
 import { cn } from '@/lib/cn';
 import { format, useStrings } from '@/lib/i18n';
 import { formatUsd, percentOf } from '@/lib/money';
-import { sampleCatalog, sampleSettings, sampleWallet } from '@/lib/sample-tabs';
 import { colors, TIERS, type TierKey } from '@/lib/theme';
 
 function Line({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: 'danger' | 'success' }) {
@@ -29,26 +30,42 @@ function Line({ label, value, strong, tone }: { label: string; value: string; st
 }
 
 // Design reference: docs/RoonPay-UI-Design-v1.1.pdf, page 10 (middle and right).
-// Packages are paid only from the wallet (CLAUDE.md §4.4). Paying here is a visual
-// sample only — the real purchase goes through the API (step 3).
+// Packages are paid only from the wallet (CLAUDE.md §4.4).
 export default function CheckoutScreen() {
-  const s = useStrings();
-  const router = useRouter();
   const params = useLocalSearchParams<{ tier?: string }>();
   const tier: TierKey = TIERS.includes(params.tier as TierKey) ? (params.tier as TierKey) : 'bronze';
-  const pkg = sampleCatalog.find((p) => p.tier === tier) ?? sampleCatalog[0];
-  const { packageLinkRewardPercent: percent, packageLinkSlots: slots } = sampleSettings;
-  const [paid, setPaid] = useState(false);
+  const config = useConfig();
+  const wallet = useWallet();
+  return (
+    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <QueryState query={both(config, wallet)}>{([c, w]) => <CheckoutBody tier={tier} config={c} balance={w.available} />}</QueryState>
+    </SafeAreaView>
+  );
+}
 
-  const balance = sampleWallet.available;
+function CheckoutBody({ tier, config, balance: liveBalance }: { tier: TierKey; config: Config; balance: bigint }) {
+  const s = useStrings();
+  const router = useRouter();
+  const pkg = config.catalog.find((p) => p.tier === tier) ?? config.catalog[0];
+  const { packageLinkRewardPercent: percent, packageLinkSlots: slots } = config.settings;
+  const buy = useBuyPackage();
+  const key = useIdempotencyKey();
+  const paid = buy.isSuccess;
+
+  // After paying, keep showing the balance from the moment of payment so the lines still add up.
+  const [paidFrom, setPaidFrom] = useState<bigint | null>(null);
+  const balance = paid && paidFrom !== null ? paidFrom : liveBalance;
   const enough = balance >= pkg.price;
   const missing = enough ? 0n : pkg.price - balance;
   // Progress = how much of the price the balance covers, in whole percent (bigint math).
   const covered = Number(enough ? 100n : (balance * 100n) / pkg.price);
   const price = formatUsd(pkg.price);
 
+  const serverMissing =
+    isApiError(buy.error) && buy.error.code === 'INSUFFICIENT_BALANCE' ? (buy.error.details.missing as bigint) : null;
+
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+    <>
       <ScrollView contentContainerClassName="gap-4 px-4 pb-6 pt-3">
         <BackHeader title={s.checkout.title} />
 
@@ -93,20 +110,35 @@ export default function CheckoutScreen() {
             title={format(s.checkout.successTitle, { name: s.tiers[tier] })}
             body={format(s.checkout.successBody, { slots })}
           />
-        ) : !enough ? (
-          <NoticeBox tone="danger" title={s.checkout.notEnoughTitle} body={format(s.checkout.notEnoughBody, { amount: formatUsd(missing) })} />
+        ) : !enough || serverMissing !== null ? (
+          <NoticeBox
+            tone="danger"
+            title={s.checkout.notEnoughTitle}
+            body={format(s.checkout.notEnoughBody, { amount: formatUsd(serverMissing ?? missing) })}
+          />
+        ) : buy.isError ? (
+          <NoticeBox tone="danger" title={s.common.errorGeneric} />
         ) : null}
       </ScrollView>
 
       <View className="border-t border-border px-4 py-3">
         {paid ? (
           <Button label={s.common.backHome} fullWidth onPress={() => router.replace('/')} />
-        ) : enough ? (
-          <Button label={format(s.checkout.pay, { amount: price })} icon={Lock} fullWidth onPress={() => setPaid(true)} />
+        ) : enough && serverMissing === null ? (
+          <Button
+            label={format(s.checkout.pay, { amount: price })}
+            icon={Lock}
+            fullWidth
+            loading={buy.isPending}
+            onPress={() => {
+              setPaidFrom(liveBalance);
+              buy.mutate({ tier, key: key.get() }, { onSuccess: key.renew });
+            }}
+          />
         ) : (
           <Button label={s.checkout.makeDeposit} icon={Plus} fullWidth onPress={() => router.push('/deposit')} />
         )}
       </View>
-    </SafeAreaView>
+    </>
   );
 }

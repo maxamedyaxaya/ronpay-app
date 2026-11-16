@@ -12,10 +12,24 @@ export type DailyRewardCardProps = {
   /** 0 = Monday … 6 = Sunday. */
   todayIndex: number;
   claimedToday: boolean;
+  /** Days of this week already claimed (0–6). */
+  claimedDays: number[];
+  /** False when the member has no active package (CLAUDE.md §4.6). */
+  canClaim: boolean;
+  claiming?: boolean;
   onClaim?: () => void;
 };
 
-export function DailyRewardCard({ weeklyTotal, dailyAmount, todayIndex, claimedToday, onClaim }: DailyRewardCardProps) {
+export function DailyRewardCard({
+  weeklyTotal,
+  dailyAmount,
+  todayIndex,
+  claimedToday,
+  claimedDays,
+  canClaim,
+  claiming,
+  onClaim,
+}: DailyRewardCardProps) {
   const s = useStrings();
   const days = Object.values(s.daysShort);
 
@@ -34,7 +48,7 @@ export function DailyRewardCard({ weeklyTotal, dailyAmount, todayIndex, claimedT
 
       <View className="mt-4 flex-row justify-between px-1">
         {days.map((d, i) => {
-          const done = i < todayIndex || (i === todayIndex && claimedToday);
+          const done = claimedDays.includes(i);
           const today = i === todayIndex && !claimedToday;
           return (
             <View key={d} className="items-center gap-1.5">
@@ -53,9 +67,10 @@ export function DailyRewardCard({ weeklyTotal, dailyAmount, todayIndex, claimedT
       </View>
 
       <Button
-        label={claimedToday ? s.home.claimed : format(s.home.claim, { amount: dailyAmount })}
+        label={claimedToday ? s.home.claimed : canClaim ? format(s.home.claim, { amount: dailyAmount }) : s.home.claimNeedsPackage}
         variant="gold"
-        disabled={claimedToday}
+        disabled={claimedToday || !canClaim}
+        loading={claiming}
         onPress={onClaim}
         fullWidth
         className="mt-4"

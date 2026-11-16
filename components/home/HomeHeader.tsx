@@ -2,20 +2,18 @@ import { Text, View } from 'react-native';
 import { Bell } from 'lucide-react-native';
 
 import { IconButton } from '@/components/ui';
-import { format, useLang, useStrings } from '@/lib/i18n';
+import { useStrings } from '@/lib/i18n';
 import { colors } from '@/lib/theme';
 
 export type HomeHeaderProps = {
   initials: string;
   name: string;
   unread: boolean;
-  onLanguage?: () => void;
   onNotifications?: () => void;
 };
 
-export function HomeHeader({ initials, name, unread, onLanguage, onNotifications }: HomeHeaderProps) {
+export function HomeHeader({ initials, name, unread, onNotifications }: HomeHeaderProps) {
   const s = useStrings();
-  const lang = useLang();
 
   return (
     <View className="flex-row items-center gap-3">
@@ -28,9 +26,6 @@ export function HomeHeader({ initials, name, unread, onLanguage, onNotifications
           {name}
         </Text>
       </View>
-      <IconButton accessibilityLabel={format(s.home.languageButton, { lang: lang.toUpperCase() })} onPress={onLanguage}>
-        <Text className="font-sans-bold text-sm text-ink">{lang.toUpperCase()}</Text>
-      </IconButton>
       <IconButton
         accessibilityLabel={unread ? s.home.notificationsUnread : s.home.notifications}
         onPress={onNotifications}

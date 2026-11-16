@@ -15,7 +15,7 @@ export type BottomTabBarProps = {
   items: TabItem[];
   activeKey: string;
   onSelect: (key: string) => void;
-  /** Adds the bottom safe-area padding (off when the bar is shown inside a page, like /dev/ui). */
+  /** Adds the bottom safe-area padding. */
   safeArea?: boolean;
   className?: string;
 };

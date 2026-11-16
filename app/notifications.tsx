@@ -1,13 +1,14 @@
-import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowUpRight, Gift, Hash, Hexagon, Link2, ShieldAlert, TriangleAlert, UserPlus, type LucideIcon } from 'lucide-react-native';
+import { ArrowDownLeft, ArrowUpRight, Clock, Gift, Hash, Hexagon, Link2, ShieldAlert, TriangleAlert, UserPlus, type LucideIcon } from 'lucide-react-native';
 
-import { BackHeader, type ActivityTone } from '@/components/ui';
+import { BackHeader, QueryState, type ActivityTone } from '@/components/ui';
+import type { AppNotification, NotificationKind } from '@/lib/api';
+import { useMarkAllRead, useMarkRead, useNotifications } from '@/lib/api/hooks';
+import { isToday, shortDate, timeOf } from '@/lib/dates';
 import { cn } from '@/lib/cn';
 import { format, useStrings } from '@/lib/i18n';
 import { formatUsd } from '@/lib/money';
-import { sampleNotifications, type NotificationKind, type SampleNotification } from '@/lib/sample-tabs';
 import { colors } from '@/lib/theme';
 
 const look: Record<NotificationKind, { icon: LucideIcon; tone: ActivityTone }> = {
@@ -17,6 +18,8 @@ const look: Record<NotificationKind, { icon: LucideIcon; tone: ActivityTone }> =
   slotsLow: { icon: TriangleAlert, tone: 'gold' },
   rank: { icon: Hash, tone: 'violet' },
   withdrawalPaid: { icon: ArrowUpRight, tone: 'violet' },
+  withdrawalRequested: { icon: Clock, tone: 'gold' },
+  depositApproved: { icon: ArrowDownLeft, tone: 'success' },
   newLogin: { icon: ShieldAlert, tone: 'danger' },
   packageActive: { icon: Hexagon, tone: 'blue' },
 };
@@ -30,13 +33,16 @@ const toneBox: Record<ActivityTone, { box: string; color: string }> = {
 };
 
 // Design reference: docs/RoonPay-UI-Design-v1.1.pdf, page 14 (left). Messages are built from
-// i18n templates so they always show in the member's language (CLAUDE.md §4.9).
+// i18n templates (CLAUDE.md §4.9).
 export default function NotificationsScreen() {
   const s = useStrings();
-  const [items, setItems] = useState(sampleNotifications);
   const n = s.notifications;
+  const query = useNotifications();
+  const markOne = useMarkRead();
+  const markAll = useMarkAllRead();
+  const items = query.data ?? [];
 
-  function text(item: SampleNotification) {
+  function text(item: AppNotification) {
     const values = {
       ...item.values,
       amount: item.amount !== undefined ? formatUsd(item.amount) : '',
@@ -45,12 +51,14 @@ export default function NotificationsScreen() {
     return { title: n[`${item.kind}Title`], body: format(n[`${item.kind}Body`], values) };
   }
 
-  const markRead = (id: string) => setItems((list) => list.map((i) => (i.id === id ? { ...i, unread: false } : i)));
+  const markRead = (item: AppNotification) => {
+    if (item.unread) markOne.mutate(item.id);
+  };
   const anyUnread = items.some((i) => i.unread);
 
   const sections = [
-    { title: n.today, list: items.filter((i) => i.today) },
-    { title: n.earlier, list: items.filter((i) => !i.today) },
+    { title: n.today, list: items.filter((i) => isToday(i.at)) },
+    { title: n.earlier, list: items.filter((i) => !isToday(i.at)) },
   ].filter((sec) => sec.list.length > 0);
 
   return (
@@ -61,7 +69,7 @@ export default function NotificationsScreen() {
           right={
             anyUnread ? (
               <Pressable
-                onPress={() => setItems((list) => list.map((i) => ({ ...i, unread: false })))}
+                onPress={() => markAll.mutate()}
                 accessibilityRole="button"
                 className="min-h-touch justify-center"
               >
@@ -71,7 +79,8 @@ export default function NotificationsScreen() {
           }
         />
 
-        {sections.length === 0 && <Text className="py-10 text-center font-sans text-sm text-muted">{n.empty}</Text>}
+        {query.data === undefined ? <QueryState query={query}>{() => null}</QueryState> : null}
+        {query.data !== undefined && sections.length === 0 && <Text className="py-10 text-center font-sans text-sm text-muted">{n.empty}</Text>}
 
         {sections.map((sec) => (
           <View key={sec.title} className="gap-2.5">
@@ -86,9 +95,9 @@ export default function NotificationsScreen() {
               return (
                 <Pressable
                   key={item.id}
-                  onPress={() => markRead(item.id)}
+                  onPress={() => markRead(item)}
                   accessibilityRole="button"
-                  accessibilityLabel={[item.unread ? n.unread : '', title, body, item.time].filter(Boolean).join(', ')}
+                  accessibilityLabel={[item.unread ? n.unread : '', title, body, (isToday(item.at) ? timeOf(item.at) : shortDate(item.at))].filter(Boolean).join(', ')}
                   className={cn(
                     'flex-row gap-3 rounded-2xl border p-3.5 active:opacity-80',
                     item.unread ? 'border-primary/40 bg-primary/10' : 'border-border bg-surface',
@@ -100,7 +109,7 @@ export default function NotificationsScreen() {
                   <View className="flex-1 gap-0.5">
                     <Text className="font-sans-bold text-[15px] text-ink">{title}</Text>
                     <Text className="font-sans text-[13px] leading-[18px] text-muted">{body}</Text>
-                    <Text className="mt-0.5 font-sans text-[11px] text-muted">{item.time}</Text>
+                    <Text className="mt-0.5 font-sans text-[11px] text-muted">{(isToday(item.at) ? timeOf(item.at) : shortDate(item.at))}</Text>
                   </View>
                   {item.unread && <View className="mt-1.5 h-2.5 w-2.5 rounded-full bg-blue" />}
                 </Pressable>

@@ -19,3 +19,4 @@ export { ListGroup, ListRow, ToggleRow, type ListRowProps, type ToggleRowProps }
 export { BackHeader, type BackHeaderProps } from './BackHeader';
 export { Select, type SelectOption, type SelectProps } from './Select';
 export { CopyRow, type CopyRowProps } from './CopyRow';
+export { QueryState, type QueryStateProps } from './QueryState';

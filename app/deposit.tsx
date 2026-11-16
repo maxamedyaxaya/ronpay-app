@@ -5,21 +5,32 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Upload, X } from 'lucide-react-native';
 
-import { BackHeader, Button, CopyRow, Input, NoticeBox, Select } from '@/components/ui';
+import { BackHeader, Button, CopyRow, Input, NoticeBox, QueryState, Select } from '@/components/ui';
+import { isApiError, type DepositAccounts } from '@/lib/api';
+import { useConfig, useIdempotencyKey, useSubmitDeposit } from '@/lib/api/hooks';
 import { format, useStrings } from '@/lib/i18n';
 import { formatUsd, parseUsd } from '@/lib/money';
-import { sampleDepositAccounts } from '@/lib/sample-tabs';
 import { colors } from '@/lib/theme';
 
 /** One list for every method: `mobile:zaad`, `bank:salaam`, … */
 type MethodKey = `mobile:${string}` | `bank:${string}`;
 
 // Design reference: docs/RoonPay-UI-Design-v1.1.pdf, page 13 (middle). Rules: CLAUDE.md §4.3.
-// Submitting is a visual sample only; the real request goes to the API in step 3.
+// The deposit stays pending until an admin approves it.
 export default function DepositScreen() {
+  const config = useConfig();
+  return (
+    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <QueryState query={config}>{(c) => <DepositBody accounts={c.depositAccounts} />}</QueryState>
+    </SafeAreaView>
+  );
+}
+
+function DepositBody({ accounts }: { accounts: DepositAccounts }) {
   const s = useStrings();
   const router = useRouter();
-  const accounts = sampleDepositAccounts;
+  const submitDeposit = useSubmitDeposit();
+  const key = useIdempotencyKey();
 
   const [method, setMethod] = useState<MethodKey>(`mobile:${accounts.mobile[0].key}`);
   const [amount, setAmount] = useState('');
@@ -49,12 +60,25 @@ export default function DepositScreen() {
       reference: reference.trim() ? undefined : s.deposit.errReference,
     };
     setErrors(next);
-    if (units && !next.payer && !next.reference) setSent({ amount: units, method: methodName });
+    if (!units || next.payer || next.reference) return;
+    submitDeposit.mutate(
+      { req: { method, amount: units, payer, reference, receiptUri: receipt ?? undefined }, key: key.get() },
+      {
+        onSuccess: () => {
+          key.renew();
+          setSent({ amount: units, method: methodName });
+        },
+        onError: (e) => {
+          key.renew();
+          if (isApiError(e) && e.code === 'DUPLICATE_REFERENCE') setErrors({ reference: s.deposit.errDuplicate });
+        },
+      },
+    );
   }
 
   if (sent) {
     return (
-      <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <>
         <View className="flex-1 gap-4 px-4 pt-3">
           <BackHeader title={s.deposit.title} />
           <NoticeBox
@@ -66,13 +90,12 @@ export default function DepositScreen() {
         <View className="border-t border-border px-4 py-3">
           <Button label={s.common.backHome} fullWidth onPress={() => router.replace('/')} />
         </View>
-      </SafeAreaView>
+      </>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerClassName="gap-4 px-4 pb-6 pt-3" keyboardShouldPersistTaps="handled">
           <BackHeader title={s.deposit.title} />
 
@@ -169,12 +192,14 @@ export default function DepositScreen() {
 
           {/* Admin-editable setting in the real app (CLAUDE.md §4.3). */}
           <NoticeBox tone="warning" title={s.deposit.timeNote} />
+          {submitDeposit.isError && !(isApiError(submitDeposit.error) && submitDeposit.error.code === 'DUPLICATE_REFERENCE') ? (
+            <NoticeBox tone="danger" title={s.common.errorGeneric} />
+          ) : null}
         </ScrollView>
 
         <View className="border-t border-border px-4 py-3">
-          <Button label={s.deposit.submit} fullWidth onPress={submit} />
+          <Button label={s.deposit.submit} fullWidth loading={submitDeposit.isPending} onPress={submit} />
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
